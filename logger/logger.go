@@ -72,7 +72,7 @@ func GetLogger() bookstoreLogger {
 	return log
 }
 
-func (l *logger) Printf(format string, v ...interface{}) {
+func (l logger) Printf(format string, v ...interface{}) {
 	if len(v) == 0 {
 		Info(format)
 	} else {
@@ -80,7 +80,7 @@ func (l *logger) Printf(format string, v ...interface{}) {
 	}
 }
 
-func (l *logger) Print(v ...interface{}) {
+func (l logger) Print(v ...interface{}) {
 	Info(fmt.Sprintf("%v", v))
 }
 
