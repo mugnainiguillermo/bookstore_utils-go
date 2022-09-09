@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"math"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -20,6 +23,11 @@ var (
 type bookstoreLogger interface {
 	Print(v ...interface{})
 	Printf(format string, v ...interface{})
+
+	// Elastic Search
+	LogRoundTrip(*http.Request, *http.Response, error, time.Time, time.Duration) error
+	RequestBodyEnabled() bool
+	ResponseBodyEnabled() bool
 }
 
 type logger struct {
@@ -74,31 +82,58 @@ func GetLogger() bookstoreLogger {
 
 func (l logger) Printf(format string, v ...interface{}) {
 	if len(v) == 0 {
-		Info(format)
+		Info(format, []string{})
 	} else {
-		Info(fmt.Sprintf(format, v...))
+		Info(fmt.Sprintf(format, v...), []string{})
 	}
 }
 
 func (l logger) Print(v ...interface{}) {
-	Info(fmt.Sprintf("%v", v))
+	Info(fmt.Sprintf("%v", v), []string{})
 }
 
-func Info(msg string, tags ...interface{}) {
-	log.log.Info(msg, mapFields(tags)...)
+func (l logger) LogRoundTrip(request *http.Request, response *http.Response, err error, time time.Time, duration time.Duration) error {
+	Info(
+		"elastic",
+		[]string{"request", "response", "error", "time", "duration"},
+		request,
+		response,
+		err,
+		time,
+		duration,
+	)
+	return nil
+}
+
+func (l logger) RequestBodyEnabled() bool {
+	return true
+}
+
+func (l logger) ResponseBodyEnabled() bool {
+	return true
+}
+
+func Info(msg string, tagNames []string, tags ...interface{}) {
+	log.log.Info(msg, mapFields(tagNames, tags)...)
 	log.log.Sync()
 }
 
-func Error(msg string, err error, tags ...interface{}) {
+func Error(msg string, err error, tagNames []string, tags ...interface{}) {
 	tags = append(tags, zap.NamedError("error", err))
-	log.log.Error(msg, mapFields(tags)...)
+	log.log.Error(msg, mapFields(tagNames, tags)...)
 	log.log.Sync()
 }
 
-func mapFields(any ...interface{}) []zap.Field {
-	fields := make([]zap.Field, len(any))
-	for i := range any {
-		fields[i] = zap.Any(fmt.Sprintf("field-%d", i+1), any[i])
+func mapFields(tagNames []string, tags []interface{}) []zap.Field {
+	fields := make(
+		[]zap.Field,
+		int64(math.Min(
+			float64(len(tagNames)),
+			float64(len(tags)),
+		)),
+	)
+	for i := range fields {
+		fields[i] = zap.Any(tagNames[i], tags[i])
 	}
 	return fields
 }
